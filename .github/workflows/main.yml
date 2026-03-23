@@ -2,8 +2,8 @@ name: Push to Velog
 
 on:
   push:
-    paths:
-      - "blog.md"
+    branches:
+      - main
 
 jobs:
   deploy:
