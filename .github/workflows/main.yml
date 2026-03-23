@@ -1,11 +1,38 @@
 name: Push to Velog
-on: [push] # 깃허브에 Push가 발생하면 실행!
+
+on:
+  push:
+    paths:
+      - "blog.md"
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v2
-      - name: velog-helper
-        uses: ozofweird/velog-helper@master # 자동 연동 도구 사용
-        with:
-          token: ${{ secrets.VELOG_TOKEN }} # 금고에서 토큰을 꺼내서 인증
+      - name: 코드 가져오기
+        uses: actions/checkout@v3
+
+      - name: blog.md 읽기
+        id: read_file
+        run: |
+          echo "CONTENT<<EOF" >> $GITHUB_OUTPUT
+          cat blog.md >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Velog 업로드
+        run: |
+          curl -X POST https://v2.velog.io/graphql \
+          -H "Content-Type: application/json" \
+          -H "Authorization: Bearer ${{ secrets.VELOG_TOKEN }}" \
+          -d '{
+            "query": "mutation WritePost($input: WritePostInput!) { writePost(input: $input) { id title url } }",
+            "variables": {
+              "input": {
+                "title": "자동 생성 글",
+                "content": "'"${{ steps.read_file.outputs.CONTENT }}"'",
+                "tags": ["AI", "자동화"],
+                "publish": true
+              }
+            }
+          }'
