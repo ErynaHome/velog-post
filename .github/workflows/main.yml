@@ -20,45 +20,28 @@ jobs:
             exit 1
           fi
 
-      - name: Encode blog.md
-        id: encode
-        run: |
-          CONTENT=$(base64 -w 0 blog.md)
-          echo "CONTENT=$CONTENT" >> $GITHUB_OUTPUT
-
       - name: Upload to Velog
         run: |
-          CONTENT=$(echo "${{ steps.encode.outputs.CONTENT }}" | base64 -d)
+          CONTENT=$(cat blog.md)
 
           JSON=$(jq -n \
             --arg title "자동 생성 글" \
             --arg body "$CONTENT" \
-            --arg token "${{ secrets.VELOG_TOKEN }}" \
             '{
-              query: "mutation WritePost($title: String, $body: String, $tags: [String], $is_markdown: Boolean, $is_temp: Boolean, $is_private: Boolean, $token: String) { writePost(title: $title, body: $body, tags: $tags, is_markdown: $is_markdown, is_temp: $is_temp, is_private: $is_private, token: $token) { id title url_slug } }",
+              query: "mutation WritePost($title: String!, $body: String!, $tags: [String], $is_markdown: Boolean, $is_temp: Boolean, $is_private: Boolean) { writePost(title: $title, body: $body, tags: $tags, is_markdown: $is_markdown, is_temp: $is_temp, is_private: $is_private) { id title url_slug } }",
               variables: {
                 title: $title,
                 body: $body,
                 tags: ["AI", "자동화"],
                 is_markdown: true,
                 is_temp: false,
-                is_private: false,
-                token: $token
+                is_private: false
               }
             }')
 
           RESPONSE=$(curl -s -X POST https://v2.velog.io/graphql \
             -H "Content-Type: application/json" \
+            -H "Cookie: access_token=${{ secrets.VELOG_TOKEN }}" \
             -d "$JSON")
 
-          echo "$RESPONSE"
-
           echo "$RESPONSE" | jq .
-
-          if echo "$RESPONSE" | jq -e '.errors' > /dev/null; then
-            echo "Velog 업로드 실패"
-            exit 1
-          fi
-
-      - name: Done
-        run: echo "Velog 업로드 완료"
