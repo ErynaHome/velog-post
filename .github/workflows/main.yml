@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - main
+    paths:
+      - 'blog.md'  # blog.md 변경시에만 실행
+  workflow_dispatch:  # 수동 실행 가능
 
 jobs:
   deploy:
@@ -11,37 +14,74 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      - name: Check blog.md
+      - name: Check blog.md exists
         run: |
           if [ ! -f blog.md ]; then
-            echo "blog.md 파일이 없습니다."
+            echo "❌ blog.md 파일이 없습니다."
             exit 1
           fi
+          echo "✅ blog.md 파일 확인됨"
+
+      - name: Debug Token (optional)
+        run: |
+          echo "Token length: ${#VELOG_TOKEN}"
+          if [ ${#VELOG_TOKEN} -lt 100 ]; then
+            echo "⚠️ 토큰이 너무 짧습니다. access_token을 다시 확인하세요."
+            exit 1
+          fi
+          echo "✅ 토큰 길이 정상"
+        env:
+          VELOG_TOKEN: ${{ secrets.VELOG_TOKEN }}
 
       - name: Upload to Velog
         run: |
+          # blog.md 내용 읽기
           CONTENT=$(cat blog.md)
-
+          
+          # 제목 추출 (첫 번째 # 라인) 또는 기본값
+          TITLE=$(grep -m1 '^# ' blog.md | sed 's/^# //' || echo "자동 생성 글")
+          if [ -z "$TITLE" ]; then
+            TITLE="자동 생성 글"
+          fi
+          echo "📝 제목: $TITLE"
+          
+          # GraphQL 요청 생성
           JSON=$(jq -n \
-            --arg title "자동 생성 글" \
+            --arg title "$TITLE" \
             --arg body "$CONTENT" \
             '{
               query: "mutation WritePost($title: String!, $body: String!, $tags: [String], $is_markdown: Boolean, $is_temp: Boolean, $is_private: Boolean) { writePost(title: $title, body: $body, tags: $tags, is_markdown: $is_markdown, is_temp: $is_temp, is_private: $is_private) { id title url_slug } }",
               variables: {
                 title: $title,
                 body: $body,
-                tags: ["AI", "자동화"],
+                tags: ["자동화"],
                 is_markdown: true,
                 is_temp: false,
                 is_private: false
               }
             }')
-
+          
+          # Velog API 호출
           RESPONSE=$(curl -s -X POST https://v2.velog.io/graphql \
             -H "Content-Type: application/json" \
             -H "Cookie: access_token=${{ secrets.VELOG_TOKEN }}" \
             -d "$JSON")
-
+          
+          echo "📡 API 응답:"
           echo "$RESPONSE" | jq .
+          
+          # 결과 확인
+          URL_SLUG=$(echo "$RESPONSE" | jq -r '.data.writePost.url_slug // empty')
+          
+          if [ -n "$URL_SLUG" ]; then
+            echo "✅ 업로드 성공!"
+            echo "🔗 https://velog.io/@eryna/$URL_SLUG"
+          else
+            echo "❌ 업로드 실패"
+            echo "$RESPONSE" | jq '.errors // .data'
+            exit 1
+          fi
+        env:
+          VELOG_TOKEN: ${{ secrets.VELOG_TOKEN }}
