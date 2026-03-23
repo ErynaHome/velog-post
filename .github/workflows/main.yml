@@ -6,6 +6,6 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - name: velog-helper
-        uses: sst606/velog-helper@main # 자동 연동 도구 사용
+        uses: ozofweird/velog-helper@master # 자동 연동 도구 사용
         with:
           token: ${{ secrets.VELOG_TOKEN }} # 금고에서 토큰을 꺼내서 인증
