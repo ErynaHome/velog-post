@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>JWT + Redis 테스트</title>
+</head>
+<body>
+
+    <h3>JWT + Redis 실습</h3>
+
+    <button onclick="testServer()">서버 확인</button>
+    <button onclick="login()">로그인 (Access + Refresh)</button>
+    <button onclick="auth()">인증 요청 (Access)</button>
+    <button onclick="reissue()">토큰 재발급 (Refresh)</button>
+    <button onclick="logout()">로그아웃</button>
+
+    <hr>
+    <pre id="result"></pre>
+
+    <script>
+        const BASE_URL = "http://localhost";
+        const USERNAME = "eryna";
+
+        function print(msg) {
+            console.log(msg);
+            document.getElementById("result").textContent += msg + "\n";
+        }
+
+        function clearPrint() {
+            document.getElementById("result").textContent = "";
+        }
+
+        async function testServer() {
+            try {
+                const resp = await fetch(`${BASE_URL}/test`, {
+                    method: "GET"
+                });
+
+                const data = await resp.text();
+                print("[서버 확인] " + data);
+            } catch (e) {
+                print("[서버 확인 실패] " + e);
+            }
+        }
+
+        async function login() {
+            try {
+                const resp = await fetch(
+                    `${BASE_URL}/login?username=${USERNAME}`,
+                    {
+                        method: "POST"
+                    }
+                );
+
+                if (!resp.ok) {
+                    const errorText = await resp.text();
+                    print("[로그인 실패] status=" + resp.status + ", body=" + errorText);
+                    return;
+                }
+
+                const data = await resp.json();
+                print("[로그인 성공] " + JSON.stringify(data));
+
+                localStorage.setItem("accessToken", data.accessToken);
+                localStorage.setItem("refreshToken", data.refreshToken);
+
+                print("[저장 완료] accessToken / refreshToken 저장");
+            } catch (e) {
+                print("[로그인 예외] " + e);
+            }
+        }
+
+        async function auth() {
+            try {
+                const accessToken = localStorage.getItem("accessToken");
+
+                if (!accessToken) {
+                    print("[인증 실패] Access Token 없음");
+                    return;
+                }
+
+                const resp = await fetch(`${BASE_URL}/getHeader`, {
+                    method: "GET",
+                    headers: {
+                        Authorization: "Bearer " + accessToken
+                    }
+                });
+
+                const data = await resp.text();
+                print("[인증 응답] " + data);
+            } catch (e) {
+                print("[인증 예외] " + e);
+            }
+        }
+
+        async function reissue() {
+            try {
+                const refreshToken = localStorage.getItem("refreshToken");
+
+                if (!refreshToken) {
+                    print("[재발급 실패] Refresh Token 없음");
+                    return;
+                }
+
+                const resp = await fetch(
+                    `${BASE_URL}/reissue?username=${USERNAME}&refreshToken=${encodeURIComponent(refreshToken)}`,
+                    {
+                        method: "POST"
+                    }
+                );
+
+                if (!resp.ok) {
+                    const errorText = await resp.text();
+                    print("[재발급 실패] status=" + resp.status + ", body=" + errorText);
+                    return;
+                }
+
+                const data = await resp.json();
+                print("[재발급 성공] " + JSON.stringify(data));
+
+                localStorage.setItem("accessToken", data.accessToken);
+                print("[저장 완료] accessToken 갱신");
+            } catch (e) {
+                print("[재발급 예외] " + e);
+            }
+        }
+
+        async function logout() {
+            try {
+                const resp = await fetch(`${BASE_URL}/logout?username=${USERNAME}`, {
+                    method: "POST"
+                });
+
+                const data = await resp.text();
+                print("[로그아웃 응답] " + data);
+
+                localStorage.removeItem("accessToken");
+                localStorage.removeItem("refreshToken");
+
+                print("[저장 삭제] accessToken / refreshToken 삭제");
+            } catch (e) {
+                print("[로그아웃 예외] " + e);
+            }
+        }
+    </script>
+
+</body>
+</html>
