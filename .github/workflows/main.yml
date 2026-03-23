@@ -4,9 +4,6 @@ on:
   push:
     branches:
       - main
-    paths:
-      - 'blog.md'  # blog.md 변경시에만 실행
-  workflow_dispatch:  # 수동 실행 가능
 
 jobs:
   deploy:
