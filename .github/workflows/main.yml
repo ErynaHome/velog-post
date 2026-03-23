@@ -10,53 +10,55 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. 코드 가져오기
       - name: Checkout
         uses: actions/checkout@v3
 
-      # 2. blog.md 존재 확인
       - name: Check blog.md
         run: |
           if [ ! -f blog.md ]; then
-            echo "blog.md 파일이 없습니다"
+            echo "blog.md 파일이 없습니다."
             exit 1
           fi
 
-      # 3. base64 인코딩 (줄바꿈/특수문자 안전)
       - name: Encode blog.md
         id: encode
         run: |
           CONTENT=$(base64 -w 0 blog.md)
           echo "CONTENT=$CONTENT" >> $GITHUB_OUTPUT
 
-      # 4. Velog 업로드
       - name: Upload to Velog
         run: |
-          # base64 → 원문 복원
           CONTENT=$(echo "${{ steps.encode.outputs.CONTENT }}" | base64 -d)
 
-          # JSON 안전하게 만들기 (jq 사용)
           JSON=$(jq -n \
             --arg title "자동 생성 글" \
-            --arg content "$CONTENT" \
+            --arg body "$CONTENT" \
+            --arg token "${{ secrets.VELOG_TOKEN }}" \
             '{
-              query: "mutation WritePost($input: WritePostInput!) { writePost(input: $input) { id title url } }",
+              query: "mutation WritePost($title: String, $body: String, $tags: [String], $is_markdown: Boolean, $is_temp: Boolean, $is_private: Boolean, $token: String) { writePost(title: $title, body: $body, tags: $tags, is_markdown: $is_markdown, is_temp: $is_temp, is_private: $is_private, token: $token) { id title url_slug } }",
               variables: {
-                input: {
-                  title: $title,
-                  content: $content,
-                  tags: ["AI","자동화"],
-                  publish: true
-                }
+                title: $title,
+                body: $body,
+                tags: ["AI", "자동화"],
+                is_markdown: true,
+                is_temp: false,
+                is_private: false,
+                token: $token
               }
             }')
 
-          # Velog GraphQL 요청
-          curl -X POST https://v2.velog.io/graphql \
+          RESPONSE=$(curl -s -X POST https://v2.velog.io/graphql \
             -H "Content-Type: application/json" \
-            -H "Authorization: Bearer ${{ secrets.VELOG_TOKEN }}" \
-            -d "$JSON"
+            -d "$JSON")
 
-      # 5. 완료 로그
+          echo "$RESPONSE"
+
+          echo "$RESPONSE" | jq .
+
+          if echo "$RESPONSE" | jq -e '.errors' > /dev/null; then
+            echo "Velog 업로드 실패"
+            exit 1
+          fi
+
       - name: Done
         run: echo "Velog 업로드 완료"
